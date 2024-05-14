@@ -1,7 +1,7 @@
 import numpy as  np
 from scipy.spatial.distance import cdist 
 from scipy.special import kv, gamma
-
+import matplotlib.pyplot as plt
 
 from sklearn.cluster import KMeans
 from auxfunctions import *
@@ -22,9 +22,7 @@ def K(X_1, X_2, cov_1, cov_2, cov_12, rho_12):
 def K_ij(X_1_i, X_1_j, X_2_i, X_2_j, cov_1, cov_2, cov_12, rho_12):
     return np.block([[cov_matrix(cov_1, X_1_i, X_1_j), cov_matrix(cov_12, X_1_i, X_2_j, rho_12)], 
                      [cov_matrix(cov_12, X_2_i, X_1_j, rho_12), cov_matrix(cov_2, X_2_i, X_2_j)]])
-
-
-
+       
 def gen_observations(d, n_1, n_2, sup, nu_1, theta_1, nu_2, theta_2, nu_12, theta_12, rho_12):
     X_1 = np.random.uniform(0, sup, (n_1, d))
     X_2 = np.random.uniform(0, sup, (n_2, d))
@@ -60,6 +58,44 @@ def co_kriging(x, X_1, X_2, Y_1, Y_2, cov_1, cov_12, rho_12, sigma):
     'si x es un conjunto de puntos, entrega las predicciones de Y_1'
     c = k(x, X_1, X_2, cov_1, cov_12, rho_12)    
     return c.T @ np.linalg.solve(sigma, np.concatenate([Y_1, Y_2]))
+
+####################### CO-KRIGING NN ########################
+
+class coKrigingNN:
+    def __init__(self, X_1, X_2, Y_1, Y_2, N, theta_1, theta_2, theta_12, nu_1, nu_2, nu_12, rho_12):
+        check_consistent_dimension(1, X_1, X_2)
+        check_consistent_dimension(0, X_1, Y_1)
+        check_consistent_dimension(0, X_2, Y_2)
+        self.X_1, self.X_2 = X_1, X_2
+        self.Y_1, self.Y_2 = Y_1, Y_2
+        self.N = N
+        
+        check_positive_elements(theta_1, theta_2, theta_12, nu_1, nu_2, nu_12)
+        self.theta_1 = theta_1
+        self.theta_2 = theta_2
+        self.theta_12 = theta_12
+        self.nu_1 = nu_1
+        self.nu_2 = nu_2
+        self.nu_12 = nu_12
+        self.rho_12 = rho_12
+    
+    def _predict(self, x):
+        indexes_1 = N_nearest_observations_points(self.X_1, x, self.N)
+        indexes_2 = N_nearest_observations_points(self.X_2, x, self.N)
+        
+        sigma = K(self.X_1[indexes_1], self.X_2[indexes_2],
+                  matern_model(self.theta_1, self.nu_1),
+                  matern_model(self.theta_2, self.nu_2),
+                  matern_model(self.theta_12, self.nu_12),
+                  self.rho_12)
+        c = k(x, self.X_1[indexes_1], self.X_2[indexes_2],
+              matern_model(self.theta_1, self.nu_1),
+              matern_model(self.theta_12, self.nu_12),
+              self.rho_12)    
+        return c.T @ np.linalg.solve(sigma, np.concatenate([Y_1[indexes_1], Y_2[indexes_2]]))
+    
+    def predict(self, X):
+        return np.array([self._predict(X[[i]]) for i in range(len(X))])  
 
 ####################### NESTED KRIGING #######################
 

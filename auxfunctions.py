@@ -1,3 +1,37 @@
+import numpy as  np
+from scipy.spatial.distance import cdist 
+
+def gen_observation_points(d, n, sup):
+    return np.random.uniform(0, sup, (n, d))
+
+def generar_grilla(sqrt_n, sup):
+    xx = np.linspace(0,sup,sqrt_n)
+    X, Y = np.meshgrid(xx,xx)
+    return np.column_stack((X.flatten(), Y.flatten())) #Ordenados de izq a der y de abajo hacia arriba
+
+def N_nearest_observations_points(X, x, N):
+    """
+    Finds the N nearest points to a given point in a set of points.
+
+    Parameters:
+    -----------
+    X : numpy array of shape (n, d)
+        Set of points, where n is the number of points
+        and d is the dimension of the points.
+
+    x : numpy array of shape (1, d)
+        Point for which the nearest points in X are to be found.
+
+    N : int
+        Number of nearest points to be found.
+
+    Returns:
+    --------
+    numpy array of shape (N,)
+        Contains the indexes of N nearest points to x in X.
+    """
+    return cdist(x, X).flatten().argsort()[:N]
+
 def check_consistent_dimension(d, *arrays):
     """Check whether all arrays have consistent dimensions along a specified axis.
 
