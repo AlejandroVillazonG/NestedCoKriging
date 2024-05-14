@@ -1,13 +1,9 @@
 import numpy as  np
-from scipy.spatial.distance import cdist 
-from scipy.special import kv, gamma
+from scipy.spatial.distance import cdist
 import matplotlib.pyplot as plt
 
 from sklearn.cluster import KMeans
 from auxfunctions import *
-
-
-matern_model = lambda t, nu: np.vectorize(lambda x: 2**(1-nu) / gamma(nu) * (t*x)**nu * kv(nu, t*x))
 
 def cov_matrix(cov_model, X_1, X_2, rho=1):
     return rho * np.nan_to_num(cov_model(cdist(X_1,X_2)), nan=1)
@@ -16,8 +12,9 @@ def k(x, X_1, X_2, cov_1, cov_12, rho_12):
     return np.concatenate([cov_matrix(cov_1, X_1, x), cov_matrix(cov_12, X_2, x, rho_12)])
 
 def K(X_1, X_2, cov_1, cov_2, cov_12, rho_12):
-    return np.block([[cov_matrix(cov_1, X_1, X_1), cov_matrix(cov_12, X_1, X_2, rho_12)], 
-                     [cov_matrix(cov_12, X_2, X_1, rho_12), cov_matrix(cov_2, X_2, X_2)]])
+    aux = cov_matrix(cov_12, X_1, X_2, rho_12)
+    return np.block([[cov_matrix(cov_1, X_1, X_1), aux], 
+                     [aux.T, cov_matrix(cov_2, X_2, X_2)]])
 
 def K_ij(X_1_i, X_1_j, X_2_i, X_2_j, cov_1, cov_2, cov_12, rho_12):
     return np.block([[cov_matrix(cov_1, X_1_i, X_1_j), cov_matrix(cov_12, X_1_i, X_2_j, rho_12)], 

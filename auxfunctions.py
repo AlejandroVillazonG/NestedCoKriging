@@ -1,6 +1,8 @@
 import numpy as  np
 from scipy.spatial.distance import cdist 
 
+from scipy.special import kv, gamma
+
 def gen_observation_points(d, n, sup):
     return np.random.uniform(0, sup, (n, d))
 
@@ -8,6 +10,21 @@ def generar_grilla(sqrt_n, sup):
     xx = np.linspace(0,sup,sqrt_n)
     X, Y = np.meshgrid(xx,xx)
     return np.column_stack((X.flatten(), Y.flatten())) #Ordenados de izq a der y de abajo hacia arriba
+
+def matern_model(theta, nu):
+    if nu == 1/2:
+        return lambda x : np.exp(-theta*x) # nu = 1/2
+    elif nu == 3/2:
+        return lambda x : np.exp(-theta*x)*(1+theta*x) # nu = 3/2
+    elif nu == 5/2:
+        return lambda x : np.exp(-theta*x)*(1+theta*x+(theta*x)**2/3) # nu = 5/2
+    else:
+        return np.vectorize(lambda x: 2**(1-nu) / gamma(nu) * (theta*x)**nu * kv(nu, theta*x))
+
+# Covarianzas de Matérn para nu = n + 1/2
+matern_model_n_0 = lambda x, theta : np.exp(-theta*x) # nu = 1/2
+matern_model_n_1 = lambda x, theta : np.exp(-theta*x)*(1+theta*x) # nu = 3/2
+matern_model_n_2 = lambda x, theta : np.exp(-theta*x)*(1+theta*x+(theta*x)**2/3) # nu = 5/2
 
 def N_nearest_observations_points(X, x, N):
     """
