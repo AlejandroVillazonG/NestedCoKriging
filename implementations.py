@@ -89,7 +89,7 @@ class coKrigingNN:
               matern_model(self.theta_1, self.nu_1),
               matern_model(self.theta_12, self.nu_12),
               self.rho_12)    
-        return c.T @ np.linalg.solve(sigma, np.concatenate([Y_1[indexes_1], Y_2[indexes_2]]))
+        return c.T @ np.linalg.solve(sigma, np.concatenate([self.Y_1[indexes_1], self.Y_2[indexes_2]]))
     
     def predict(self, X):
         return np.array([self._predict(X[[i]]) for i in range(len(X))])  
