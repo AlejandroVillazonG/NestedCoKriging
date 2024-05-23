@@ -11,6 +11,10 @@ def generar_grilla(sqrt_n, sup):
     X, Y = np.meshgrid(xx,xx)
     return np.column_stack((X.flatten(), Y.flatten())) #Ordenados de izq a der y de abajo hacia arriba
 
+cauchy_model = lambda beta, nu : lambda x : (1 + x**2 / beta)**(-nu) 
+
+cauchy_model_v2 = lambda beta, nu : lambda x : np.float_power((1 + np.power(x, 2) / beta), -nu)
+
 def matern_model(theta, nu):
     if nu == 1/2:
         return lambda x : np.exp(-theta*x) # nu = 1/2

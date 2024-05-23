@@ -19,12 +19,11 @@ def K(X_1, X_2, cov_1, cov_2, cov_12, rho_12):
 def K_ij(X_1_i, X_1_j, X_2_i, X_2_j, cov_1, cov_2, cov_12, rho_12):
     return np.block([[cov_matrix(cov_1, X_1_i, X_1_j), cov_matrix(cov_12, X_1_i, X_2_j, rho_12)], 
                      [cov_matrix(cov_12, X_2_i, X_1_j, rho_12), cov_matrix(cov_2, X_2_i, X_2_j)]])
-       
-def gen_observations(d, n_1, n_2, sup, nu_1, theta_1, nu_2, theta_2, nu_12, theta_12, rho_12):
-    X_1 = np.random.uniform(0, sup, (n_1, d))
-    X_2 = np.random.uniform(0, sup, (n_2, d))
-    
-    sigma = K(X_1, X_2, matern_model(theta_1, nu_1), matern_model(theta_2, nu_2), matern_model(theta_12, nu_12), rho_12)
+
+def gen_observations(X_1, X_2, cov_1, cov_2, cov_12, rho_12):
+    n_1 = len(X_1)
+    n_2 = len(X_2)
+    sigma = K(X_1, X_2, cov_1, cov_2, cov_12, rho_12)
     Y = np.linalg.cholesky(sigma) @ np.random.normal(0, 1, (n_1+n_2))
 
     return X_1, X_2, Y[:n_1], Y[n_1:] # (X_1, X_2, Y_1, Y_2)
@@ -59,13 +58,14 @@ def co_kriging(x, X_1, X_2, Y_1, Y_2, cov_1, cov_12, rho_12, sigma):
 ####################### CO-KRIGING NN ########################
 
 class coKrigingNN:
-    def __init__(self, X_1, X_2, Y_1, Y_2, N, theta_1, theta_2, theta_12, nu_1, nu_2, nu_12, rho_12):
+    def __init__(self, X_1, X_2, Y_1, Y_2, N, cov_family, theta_1, theta_2, theta_12, nu_1, nu_2, nu_12, rho_12):
         check_consistent_dimension(1, X_1, X_2)
         check_consistent_dimension(0, X_1, Y_1)
         check_consistent_dimension(0, X_2, Y_2)
         self.X_1, self.X_2 = X_1, X_2
         self.Y_1, self.Y_2 = Y_1, Y_2
         self.N = N
+        self.cov_family = cov_family
         
         check_positive_elements(theta_1, theta_2, theta_12, nu_1, nu_2, nu_12)
         self.theta_1 = theta_1
@@ -81,13 +81,13 @@ class coKrigingNN:
         indexes_2 = N_nearest_observations_points(self.X_2, x, self.N)
         
         sigma = K(self.X_1[indexes_1], self.X_2[indexes_2],
-                  matern_model(self.theta_1, self.nu_1),
-                  matern_model(self.theta_2, self.nu_2),
-                  matern_model(self.theta_12, self.nu_12),
+                  self.cov_family(self.theta_1, self.nu_1),
+                  self.cov_family(self.theta_2, self.nu_2),
+                  self.cov_family(self.theta_12, self.nu_12),
                   self.rho_12)
         c = k(x, self.X_1[indexes_1], self.X_2[indexes_2],
-              matern_model(self.theta_1, self.nu_1),
-              matern_model(self.theta_12, self.nu_12),
+              self.cov_family(self.theta_1, self.nu_1),
+              self.cov_family(self.theta_12, self.nu_12),
               self.rho_12)    
         return c.T @ np.linalg.solve(sigma, np.concatenate([self.Y_1[indexes_1], self.Y_2[indexes_2]]))
     
@@ -157,7 +157,7 @@ class NestedKriging:
         self.theta = theta
         self.nu = nu
         
-        self.cov = matern_model(self.theta, self.nu) if cov is None else cov 
+        self.cov = self.cov_family(self.theta, self.nu) if cov is None else cov 
         
         self.sigma = None
         self.ZZZ = None
@@ -265,7 +265,7 @@ class NestedCoKriging:
     '''
     Queremos predecir observaciones de la variable Y_1 utilizando las obs. de ambas.
     '''
-    def __init__(self, X_1, X_2, Y_1, Y_2, theta_1, theta_2, theta_12, nu_1, nu_2, nu_12, rho_12):
+    def __init__(self, X_1, X_2, Y_1, Y_2, cov_family, theta_1, theta_2, theta_12, nu_1, nu_2, nu_12, rho_12):
         check_consistent_dimension(1, X_1, X_2)
         check_consistent_dimension(0, X_1, Y_1)
         check_consistent_dimension(0, X_2, Y_2)
@@ -273,6 +273,7 @@ class NestedCoKriging:
         self.Y_1, self.Y_2 = Y_1, Y_2
         self.d = self.X_1.shape[1]
         self.n_1, self.n_2 = self.X_1.shape[0], self.X_2.shape[0]
+        self.cov_family = cov_family
         
         check_positive_elements(theta_1, theta_2, theta_12, nu_1, nu_2, nu_12)
         self.theta_1 = theta_1
@@ -292,7 +293,7 @@ class NestedCoKriging:
         Y = np.concatenate([self.Y_1, self.Y_2])
         A = [[x,y] for x,y in zip(A_1, A_2)]
         shift_n = self.n_1
-        k_x_Xs = k(x, self.X_1, self.X_2, matern_model(self.theta_1, self.nu_1), matern_model(self.theta_12, self.nu_12), self.rho_12)
+        k_x_Xs = k(x, self.X_1, self.X_2, self.cov_family(self.theta_1, self.nu_1), self.cov_family(self.theta_12, self.nu_12), self.rho_12)
         
         
         lens_A = [sum(len(subsublist) for subsublist in sublist) for sublist in A]
@@ -327,9 +328,9 @@ class NestedCoKriging:
             for j in range(i+1, len(A)):
                 self.ZZZ[row:(row+lens_A[i]), column:(column+lens_A[j])] = K_ij(self.X_1[A[i][0]], self.X_1[A[j][0]], 
                                                                                 self.X_2[A[i][1]], self.X_2[A[j][1]],
-                                                                                matern_model(self.theta_1, self.nu_1),
-                                                                                matern_model(self.theta_2, self.nu_2),
-                                                                                matern_model(self.theta_12, self.nu_12),
+                                                                                self.cov_family(self.theta_1, self.nu_1),
+                                                                                self.cov_family(self.theta_2, self.nu_2),
+                                                                                self.cov_family(self.theta_12, self.nu_12),
                                                                                 self.rho_12)
                 column+=lens_A[j]
             row+=lens_A[i]
@@ -338,9 +339,9 @@ class NestedCoKriging:
         for i in range(len(A)):
             self.ZZZ[pivot:(pivot+lens_A[i]), pivot:(pivot+lens_A[i])] = K_ij(self.X_1[A[i][0]], self.X_1[A[i][0]], 
                                                                               self.X_2[A[i][1]], self.X_2[A[i][1]],
-                                                                              matern_model(self.theta_1, self.nu_1),
-                                                                              matern_model(self.theta_2, self.nu_2),
-                                                                              matern_model(self.theta_12, self.nu_12),
+                                                                              self.cov_family(self.theta_1, self.nu_1),
+                                                                              self.cov_family(self.theta_2, self.nu_2),
+                                                                              self.cov_family(self.theta_12, self.nu_12),
                                                                               self.rho_12)
             pivot+=lens_A[i]
     
