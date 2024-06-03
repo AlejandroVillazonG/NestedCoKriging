@@ -287,10 +287,19 @@ class NestedCoKriging:
          
         self.ZZZ = None
         
-    def ncok(self, x, A_1, A_2):
+    def ncok(self, x, A_1=[], A_2=[], NN=False, n_clusters=None):
         check_consistent_dimension(0, A_1, A_2)
-                     
+
         Y = np.concatenate([self.Y_1, self.Y_2])
+        if NN:
+            indices_1 = N_nearest_observations_points(self.X_1, x, self.n_1)
+            A_1 = indices_1[:(-(self.n_1%n_clusters) if self.n_1%n_clusters!=0 else self.n_1)].reshape((n_clusters, self.n_1//n_clusters)).tolist()
+            A_1[-1] += indices_1[-(self.n_1%n_clusters):].tolist() if self.n_1%n_clusters!=0 else []
+
+            indices_2 = N_nearest_observations_points(self.X_2, x, self.n_2)
+            A_2 = indices_2[:(-(self.n_2%n_clusters) if self.n_2%n_clusters!=0 else self.n_2)].reshape((n_clusters, self.n_2//n_clusters)).tolist()
+            A_2[-1] += indices_2[-(self.n_2%n_clusters):].tolist() if self.n_2%n_clusters!=0 else []
+
         A = [[x,y] for x,y in zip(A_1, A_2)]
         shift_n = self.n_1
         k_x_Xs = k(x, self.X_1, self.X_2, self.cov_family(self.theta_1, self.nu_1), self.cov_family(self.theta_12, self.nu_12), self.rho_12)
@@ -299,8 +308,8 @@ class NestedCoKriging:
         lens_A = [sum(len(subsublist) for subsublist in sublist) for sublist in A]
         cumsum_lens_A = np.cumsum(lens_A)
         
-        if self.ZZZ is None:
-            self.gen_big_matrix(A, shift_n, lens_A, cumsum_lens_A)
+        if self.ZZZ is None or NN:
+            self.gen_big_matrix(A, lens_A, cumsum_lens_A)
         
         pivot, C = 0, np.zeros((sum(lens_A), len(A)))
     
@@ -321,7 +330,7 @@ class NestedCoKriging:
         K_M = C.T @ self.ZZZ @ C
         return np.diag(K_M) @ np.linalg.solve(K_M, M)
     
-    def gen_big_matrix(self, A, shift_n, lens_A, cumsum_lens_A):
+    def gen_big_matrix(self, A, lens_A, cumsum_lens_A):
         row, self.ZZZ = 0, np.zeros((sum(lens_A), sum(lens_A)))
         for i in range(len(A)):
             column=cumsum_lens_A[i]
@@ -345,9 +354,9 @@ class NestedCoKriging:
                                                                               self.rho_12)
             pivot+=lens_A[i]
     
-    def predict(self, X_test, A_1, A_2):
+    def predict(self, X_test, A_1=[], A_2=[], NN=False, n_clusters=None):
         check_consistent_dimension(0, A_1, A_2)
-        return np.array([self.ncok(X_test[[i]], A_1, A_2) for i in range(len(X_test))])
+        return np.array([self.ncok(X_test[[i]], A_1, A_2, NN, n_clusters) for i in range(len(X_test))])
     
     def plot_obs(self, figsize=(12, 5)):
         if self.d != 2:
