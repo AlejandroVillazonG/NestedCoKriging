@@ -53,38 +53,55 @@ def generar_grilla(sqrt_n):
     return np.column_stack((X.flatten(), Y.flatten())) #Ordenados de izq a der y de abajo hacia arriba
 
 
-sqrt_n = 50
+sqrt_n = 30
 X_test = generar_grilla(sqrt_n)
 
 
-
-sigma = cov_matrix(matern_model(theta_1, nu_1), X_1, X_1)
-with st.spinner(text='Calculando Kriging...'):
-    Y_K = kriging(X_test, X_1, Y_1, sigma, matern_model(theta_1, nu_1))
 st.title('Kriging')
-fig = plt.figure(figsize=(4,2))
-plt.imshow(Y_K.reshape((sqrt_n,sqrt_n)), origin='lower',
-        #    interpolation='gaussian',
-           extent=[0,sup,0,sup])
-plt.colorbar()
-st.pyplot(fig, use_container_width=False)
+with st.spinner(text='Calculando Kriging...'):
+    sigma = cov_matrix(matern_model(theta_1, nu_1), X_1, X_1)
+    Y_K = kriging(X_test, X_1, Y_1, sigma, matern_model(theta_1, nu_1))
+fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True, figsize=(8, 3))
+ax1.scatter(X_test[:, 0], X_test[:, 1], c=Y_K)
+im = ax2.imshow(Y_K.reshape((sqrt_n,sqrt_n)), origin='lower',
+                interpolation='gaussian', extent=[0,sup,0,sup])
+ax2.set_title('Interpolación Gaussiana')
+fig.tight_layout()
+fig.colorbar(scatter2, ax=[ax1, ax2])
+st.pyplot(fig)
 
 
-
-sigma = K(X_1, X_2,
-          matern_model(theta_1, nu_1),
-          matern_model(theta_2, nu_2),
-          matern_model(theta_12, nu_12),
-          rho_12)
+st.title('co-Kriging')
 with st.spinner(text='Calculando co-Kriging...'):
+    sigma = K(X_1, X_2,
+            matern_model(theta_1, nu_1),
+            matern_model(theta_2, nu_2),
+            matern_model(theta_12, nu_12),
+            rho_12)
     Y_coK = co_kriging(X_test, X_1, X_2, Y_1, Y_2,
                        matern_model(theta_1, nu_1),
                        matern_model(theta_12, nu_12),
                        rho_12, sigma)
-st.title('co-Kriging')
-fig = plt.figure(figsize=(4,2))
-plt.imshow(Y_coK.reshape((sqrt_n,sqrt_n)), origin='lower',
-        #    interpolation='gaussian',
-           extent=[0,sup,0,sup])
-plt.colorbar()
-st.pyplot(fig, use_container_width=False)
+
+fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True, figsize=(8, 3))
+ax1.scatter(X_test[:, 0], X_test[:, 1], c=Y_coK)
+im = ax2.imshow(Y_coK.reshape((sqrt_n,sqrt_n)), origin='lower',
+                interpolation='gaussian', extent=[0,sup,0,sup])
+ax2.set_title('Interpolación Gaussiana')
+fig.tight_layout()
+fig.colorbar(scatter2, ax=[ax1, ax2])
+st.pyplot(fig)
+
+
+st.title('Nested co-Kriging')
+n_clusters = st.slider('Cantidad de clusters (submodelos)', min_value=2, max_value=min(n_1,n_2)//2, step=1)
+A_1 = gen_A(X_1, n_clusters)
+A_2 = gen_A(X_2, n_clusters)
+
+fig, (ax1, ax2) = plt.subplots(1, 2, sharey=True, figsize=(8, 3))
+for i in range(n_clusters):
+    ax1.scatter(X_1[A_1[i], 0], X_1[A_1[i], 1])
+    ax2.scatter(X_2[A_2[i], 0], X_2[A_2[i], 1])
+
+fig.tight_layout()
+st.pyplot(fig)
