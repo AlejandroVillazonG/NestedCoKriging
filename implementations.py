@@ -35,6 +35,19 @@ def gen_A(X, n_clusters):
         A[label].append(i)
     return A
 
+def gen_As(X_1, X_2, n_clusters, init="k-means++"):
+    KM_1 = KMeans(n_clusters=n_clusters, init=init).fit(X_1)
+    KM_2 = KMeans(n_clusters=n_clusters, init=KM_1.cluster_centers_).fit(X_2)
+
+    A_1 = [[] for _ in range(n_clusters)]
+    for i, label in enumerate(KM_1.labels_):
+        A_1[label].append(i)
+        
+    A_2 = [[] for _ in range(n_clusters)]
+    for i, label in enumerate(KM_2.labels_):
+        A_2[label].append(i)
+   
+    return A_1, A_2
 
 ########################### KRIGING ##########################
 
