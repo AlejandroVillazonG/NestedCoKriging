@@ -5,20 +5,21 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import KMeans
 from auxfunctions import *
 
-def cov_matrix(cov_model, X_1, X_2, rho=1, a=0):
-    return rho * np.nan_to_num(cov_model(cdist(X_1+a,X_2)), nan=1)
+def cov_matrix(cov_model, X_1, X_2, rho=1, a=0, sigma_1=1, sigma_2=1):
+    return sigma_1*sigma_2*rho*np.nan_to_num(cov_model(cdist(X_1+a, X_2)), nan=1)
 
-def k(x, X_1, X_2, cov_1, cov_12, rho_12, a=0):
-    return np.concatenate([cov_matrix(cov_1, x, X_1).T, cov_matrix(cov_12, x, X_2, rho_12, a).T])
+def k(x, X_1, X_2, cov_1, cov_12, rho_12, a=0, sigma_1=1, sigma_2=1):
+    return np.concatenate([cov_matrix(cov_1, x, X_1, 1, 0, sigma_1, sigma_1).T,
+                           cov_matrix(cov_12, x, X_2, rho_12, a, sigma_1, sigma_2).T])
 
-def K(X_1, X_2, cov_1, cov_2, cov_12, rho_12, a=0):
-    aux = cov_matrix(cov_12, X_1, X_2, rho_12, a)
-    return np.block([[cov_matrix(cov_1, X_1, X_1), aux], 
-                     [aux.T, cov_matrix(cov_2, X_2, X_2)]])
+def K(X_1, X_2, cov_1, cov_2, cov_12, rho_12, a=0, sigma_1=1, sigma_2=1):
+    aux = cov_matrix(cov_12, X_1, X_2, rho_12, a, sigma_1, sigma_2)
+    return np.block([[cov_matrix(cov_1, X_1, X_1, 1, 0, sigma_1, sigma_1), aux], 
+                     [aux.T, cov_matrix(cov_2, X_2, X_2, 1, 0, sigma_2, sigma_2)]])
 
-def K_ij(X_1_i, X_1_j, X_2_i, X_2_j, cov_1, cov_2, cov_12, rho_12, a=0):
-    return np.block([[cov_matrix(cov_1, X_1_i, X_1_j), cov_matrix(cov_12, X_1_i, X_2_j, rho_12, a)], 
-                     [cov_matrix(cov_12, X_2_i, X_1_j, rho_12, -a), cov_matrix(cov_2, X_2_i, X_2_j)]])
+def K_ij(X_1_i, X_1_j, X_2_i, X_2_j, cov_1, cov_2, cov_12, rho_12, a=0, sigma_1=1, sigma_2=1):
+    return np.block([[cov_matrix(cov_1, X_1_i, X_1_j, 1, 0, sigma_1, sigma_1), cov_matrix(cov_12, X_1_i, X_2_j, rho_12, a, sigma_1, sigma_2)], 
+                     [cov_matrix(cov_12, X_2_i, X_1_j, rho_12, -a, sigma_1, sigma_2), cov_matrix(cov_2, X_2_i, X_2_j, 1, 0, sigma_2, sigma_2)]])
 
 def gen_observations(X_1, X_2, cov_1, cov_2, cov_12, rho_12):
     n_1 = len(X_1)
@@ -35,9 +36,9 @@ def gen_A(X, n_clusters):
         A[label].append(i)
     return A
 
-def gen_As(X_1, X_2, n_clusters, init="k-means++"):
-    KM_1 = KMeans(n_clusters=n_clusters, init=init).fit(X_1)
-    KM_2 = KMeans(n_clusters=n_clusters, init=KM_1.cluster_centers_).fit(X_2)
+def gen_As(X_1, X_2, n_clusters, init="k-means++", random_state=None):
+    KM_1 = KMeans(n_clusters=n_clusters, init=init, random_state=random_state).fit(X_1)
+    KM_2 = KMeans(n_clusters=n_clusters, init=KM_1.cluster_centers_, random_state=random_state).fit(X_2)
 
     A_1 = [[] for _ in range(n_clusters)]
     for i, label in enumerate(KM_1.labels_):
@@ -63,15 +64,15 @@ def kriging(x, X, Y, sigma, cov):
 
 ######################### CO-KRIGING #########################
 
-def co_kriging(x, X_1, X_2, Y_1, Y_2, cov_1, cov_12, rho_12, sigma, a=0):
+def co_kriging(x, X_1, X_2, Y_1, Y_2, cov_1, cov_12, rho_12, sigma, a=0, sigma_1=1, sigma_2=1):
     'si x es un conjunto de puntos, entrega las predicciones de Y_1'
-    c = k(x, X_1, X_2, cov_1, cov_12, rho_12, a)    
+    c = k(x, X_1, X_2, cov_1, cov_12, rho_12, a, sigma_1, sigma_2)    
     return c.T @ np.linalg.solve(sigma, np.concatenate([Y_1, Y_2]))
 
 ####################### CO-KRIGING NN ########################
 
 class coKrigingNN:
-    def __init__(self, X_1, X_2, Y_1, Y_2, N, cov_family, theta_1, theta_2, theta_12, nu_1, nu_2, nu_12, rho_12, a=0):
+    def __init__(self, X_1, X_2, Y_1, Y_2, N, cov_family, theta_1, theta_2, theta_12, nu_1, nu_2, nu_12, rho_12, a=0, sigma_1=1, sigma_2=1):
         check_consistent_dimension(1, X_1, X_2)
         check_consistent_dimension(0, X_1, Y_1)
         check_consistent_dimension(0, X_2, Y_2)
@@ -82,14 +83,17 @@ class coKrigingNN:
         self.cov_family = cov_family
         self.a = a
 
-        check_positive_elements(theta_1, theta_2, theta_12, nu_1, nu_2, nu_12)
+        check_positive_elements(theta_1, theta_2, theta_12, nu_1, nu_2, nu_12, sigma_1, sigma_2)
         self.theta_1 = theta_1
         self.theta_2 = theta_2
         self.theta_12 = theta_12
         self.nu_1 = nu_1
         self.nu_2 = nu_2
         self.nu_12 = nu_12
-        self.rho_12 = rho_12
+        self.rho_12 = rho_12        
+        self.sigma_1 = sigma_1
+        self.sigma_2 = sigma_2
+
     
     def _predict(self, x):
         indexes_1 = N_nearest_observations_points(self.X_1, x, self.N)
@@ -99,11 +103,11 @@ class coKrigingNN:
                   self.cov_family(self.theta_1, self.nu_1),
                   self.cov_family(self.theta_2, self.nu_2),
                   self.cov_family(self.theta_12, self.nu_12),
-                  self.rho_12, self.a)
+                  self.rho_12, self.a, self.sigma_1, self.sigma_2)
         c = k(x, self.X_1[indexes_1], self.X_2[indexes_2],
               self.cov_family(self.theta_1, self.nu_1),
               self.cov_family(self.theta_12, self.nu_12),
-              self.rho_12, self.a)    
+              self.rho_12, self.a, self.sigma_1, self.sigma_2)    
         return c.T @ np.linalg.solve(sigma, np.concatenate([self.Y_1[indexes_1], self.Y_2[indexes_2]]))
     
     def predict(self, X):
@@ -280,7 +284,7 @@ class NestedCoKriging:
     '''
     Queremos predecir observaciones de la variable Y_1 utilizando las obs. de ambas.
     '''
-    def __init__(self, X_1, X_2, Y_1, Y_2, cov_family, theta_1, theta_2, theta_12, nu_1, nu_2, nu_12, rho_12, a=0):
+    def __init__(self, X_1, X_2, Y_1, Y_2, cov_family, theta_1, theta_2, theta_12, nu_1, nu_2, nu_12, rho_12, a=0, sigma_1=1, sigma_2=1):
         check_consistent_dimension(1, X_1, X_2)
         check_consistent_dimension(0, X_1, Y_1)
         check_consistent_dimension(0, X_2, Y_2)
@@ -291,7 +295,7 @@ class NestedCoKriging:
         self.cov_family = cov_family
         self.a = a
         
-        check_positive_elements(theta_1, theta_2, theta_12, nu_1, nu_2, nu_12)
+        check_positive_elements(theta_1, theta_2, theta_12, nu_1, nu_2, nu_12, sigma_1, sigma_2)
         self.theta_1 = theta_1
         self.theta_2 = theta_2
         self.theta_12 = theta_12
@@ -299,7 +303,8 @@ class NestedCoKriging:
         self.nu_2 = nu_2
         self.nu_12 = nu_12
         self.rho_12 = rho_12
-        
+        self.sigma_1 = sigma_1
+        self.sigma_2 = sigma_2
          
         self.ZZZ = None
         
@@ -318,8 +323,10 @@ class NestedCoKriging:
 
         A = [[x,y] for x,y in zip(A_1, A_2)]
         shift_n = self.n_1
-        k_x_Xs = k(x, self.X_1, self.X_2, self.cov_family(self.theta_1, self.nu_1), self.cov_family(self.theta_12, self.nu_12), self.rho_12, self.a)
-        
+        k_x_Xs = k(x, self.X_1, self.X_2, 
+                   self.cov_family(self.theta_1, self.nu_1), 
+                   self.cov_family(self.theta_12, self.nu_12), 
+                   self.rho_12, self.a, self.sigma_1, self.sigma_2)
         
         lens_A = [sum(len(subsublist) for subsublist in sublist) for sublist in A]
         cumsum_lens_A = np.cumsum(lens_A)
@@ -356,7 +363,7 @@ class NestedCoKriging:
                                                                                 self.cov_family(self.theta_1, self.nu_1),
                                                                                 self.cov_family(self.theta_2, self.nu_2),
                                                                                 self.cov_family(self.theta_12, self.nu_12),
-                                                                                self.rho_12, self.a)
+                                                                                self.rho_12, self.a, self.sigma_1, self.sigma_2)
                 column+=lens_A[j]
             row+=lens_A[i]
         self.ZZZ += self.ZZZ.T
@@ -367,7 +374,7 @@ class NestedCoKriging:
                                                                               self.cov_family(self.theta_1, self.nu_1),
                                                                               self.cov_family(self.theta_2, self.nu_2),
                                                                               self.cov_family(self.theta_12, self.nu_12),
-                                                                              self.rho_12, self.a)
+                                                                              self.rho_12, self.a, self.sigma_1, self.sigma_2)
             pivot+=lens_A[i]
     
     def predict(self, X_test, A_1=[], A_2=[], NN=False, n_clusters=None):
