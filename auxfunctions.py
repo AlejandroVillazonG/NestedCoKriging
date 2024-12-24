@@ -3,6 +3,9 @@ from scipy.spatial.distance import cdist
 
 from scipy.special import kv, gamma
 
+def rho_matern(d, nu_1, nu_2, nu_12, theta_1, theta_2, theta_12):
+    return (theta_12**2/(theta_1*theta_2))**(d/2) * ( gamma(nu_1+d/2)*gamma(nu_2+d/2) / (gamma(nu_1)*gamma(nu_2)) )**(1/2) * gamma(nu_12)/gamma(nu_12+d/2)
+
 def gen_observation_points(d, n, sup):
     return np.random.uniform(0, sup, (n, d))
 
@@ -79,8 +82,7 @@ def check_consistent_dimension(d, *arrays):
             "Found input variables with inconsistent numbers of dimensions: %r"
             % [int(l) for l in dimensions]
         )
-        
-        
+              
 def check_positive_elements(*args):
     """Check whether all elements in the provided arguments are greater than 0.
 
